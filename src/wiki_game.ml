@@ -15,8 +15,16 @@ open! Core
    uniformity in article format. We can expect that all Wikipedia article links parsed
    from a Wikipedia page will have the form "/wiki/<TITLE>". *)
 let get_linked_articles contents : string list =
-  ignore (contents : string);
-  failwith "TODO"
+  let open Soup in
+  let lst = parse contents
+  $$ "#bodyContent a[href]"
+  |> to_list |> List.filter_map ~f:(fun li -> 
+    let href = R.attribute "href" li in
+    match Wikipedia_namespace.namespace href with 
+    | None -> Some href
+    | Some _ -> None
+    ) |> List.dedup_and_sort ~compare:String.compare in
+    lst
 ;;
 
 let print_links_command =
@@ -111,4 +119,25 @@ let command =
     ; "visualize", visualize_command
     ; "find-path", find_path_command
     ]
+;;
+
+let print_str_lst lst = List.iter lst ~f:(fun i -> printf "%s\n" i)
+
+let test ~content = 
+  let linked_articles = get_linked_articles content in
+  Stdio.printf !"Linked Articles: "; print_str_lst linked_articles;
+;;
+
+let %expect_test "test get_linked_articles" = 
+  let content = File_fetcher.fetch_exn Remote ~resource:"https://en.wikipedia.org/wiki/Endara" in
+  test ~content;
+  [%expect {|
+        Linked Articles: /wiki/Endara
+        /wiki/Given_name
+        /wiki/Guido_J._Martinelli_Endara
+        /wiki/Guillermo_Endara
+        /wiki/Iv%C3%A1n_Endara
+        /wiki/Main_Page
+        /wiki/Surname 
+      |}]
 ;;
