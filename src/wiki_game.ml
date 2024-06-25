@@ -16,15 +16,14 @@ open! Core
    from a Wikipedia page will have the form "/wiki/<TITLE>". *)
 let get_linked_articles contents : string list =
   let open Soup in
-  let lst = parse contents
-  $$ "#bodyContent a[href]"
+parse contents
+  $$ "a[href*='/wiki/']"
   |> to_list |> List.filter_map ~f:(fun li -> 
     let href = R.attribute "href" li in
     match Wikipedia_namespace.namespace href with 
     | None -> Some href
     | Some _ -> None
-    ) |> List.dedup_and_sort ~compare:String.compare in
-    lst
+    ) |> Set.of_list (module String) |> Set.to_list
 ;;
 
 let print_links_command =
@@ -124,7 +123,7 @@ let command =
 let print_str_lst lst = List.iter lst ~f:(fun i -> printf "%s\n" i)
 
 let test ~content = 
-  let linked_articles = get_linked_articles content in
+  let linked_articles = get_linked_articles content |> List.dedup_and_sort ~compare:String.compare in
   Stdio.printf !"Linked Articles: "; print_str_lst linked_articles;
 ;;
 
@@ -134,6 +133,7 @@ let %expect_test "test get_linked_articles" =
   [%expect {|
         Linked Articles: /wiki/Endara
         /wiki/Given_name
+        /wiki/Gonzalo_Endara_Crow
         /wiki/Guido_J._Martinelli_Endara
         /wiki/Guillermo_Endara
         /wiki/Iv%C3%A1n_Endara
