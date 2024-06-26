@@ -1,5 +1,5 @@
 open! Core
-
+module Article = String
 (* [get_linked_articles] should return a list of wikipedia article lengths contained in
    the input.
 
@@ -37,17 +37,73 @@ let print_links_command =
         List.iter (get_linked_articles contents) ~f:print_endline]
 ;;
 
+module G = Graph.Imperative.Graph.Concrete (Article)
+
+module Dot = Graph.Graphviz.Dot (struct
+    include G
+
+    let edge_attributes _ = [ `Dir `None ]
+    let default_edge_attributes _ = []
+    let get_subgraph _ = None
+    let vertex_attributes v = [ `Shape `Box; `Label v; `Fillcolor 1000 ]
+    let vertex_name v = v
+    let default_vertex_attributes _ = []
+    let graph_attributes _ = []
+  end)
+
+  
+let get_title ~vertex ~how_to_fetch= 
+  let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
+  let open Soup in
+  parse contents $ "title" |> R.leaf_text |> (String.substr_replace_all ~pattern:"-" ~with_:"") |> (String.substr_replace_all ~pattern:" " ~with_:"") |> String.substr_replace_all ~pattern:"(" ~with_:"" |> String.substr_replace_all ~pattern:")" ~with_:""
+;;
+
+let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_worklist ~seen = 
+  match max_depth with 
+  | 0 -> matrix
+  |_ ->
+  match List.length worklist with 
+  | 0 -> 
+    let worklist = next_worklist in
+    let next_worklist = [] in
+    get_adjacency_matrix ~max_depth:(max_depth - 1) ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
+  | _ -> 
+    let vertex = List.hd_exn worklist in
+    match Set.mem seen vertex with 
+    | true -> 
+      let worklist = List.tl_exn worklist in
+      get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
+    | _ ->
+    let seen = Set.add seen vertex in
+    let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
+    let linked_articles = get_linked_articles contents in
+    let matrix = matrix @ [[get_title ~vertex ~how_to_fetch] @ List.map linked_articles ~f:(fun i -> get_title ~vertex:i ~how_to_fetch)] in
+    let worklist = List.tl_exn worklist in
+    let next_worklist = next_worklist @ linked_articles in
+    get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
+;;
+
+
+let add_edge_between_aticles lst ~graph =
+  List.iter (List.tl_exn lst) ~f:(fun i -> G.add_edge graph (List.hd_exn lst) i);
+  graph
+;;
 (* [visualize] should explore all linked articles up to a distance of [max_depth] away
    from the given [origin] article, and output the result as a DOT file. It should use the
    [how_to_fetch] argument along with [File_fetcher] to fetch the articles so that the
    implementation can be tested locally on the small dataset in the ../resources/wiki
    directory. *)
 let visualize ?(max_depth = 3) ~origin ~output_file ~how_to_fetch () : unit =
-  ignore (max_depth : int);
-  ignore (origin : string);
-  ignore (output_file : File_path.t);
-  ignore (how_to_fetch : File_fetcher.How_to_fetch.t);
-  failwith "TODO"
+  let matrix = [] in
+  let seen = Set.empty (module String) in
+  let worklist = [origin] in
+  let matrix = get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~next_worklist:[]
+              ~worklist ~seen in
+  print_s [%message (matrix:string list list)];
+  let graph = List.fold matrix ~init:(G.create ()) ~f:(fun graph i -> add_edge_between_aticles i ~graph) in
+  Dot.output_graph
+          (Out_channel.create (File_path.to_string output_file))
+          graph;
 ;;
 
 let visualize_command =

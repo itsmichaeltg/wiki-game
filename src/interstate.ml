@@ -4,14 +4,18 @@ module City = String
 module Highways = struct
   module Connection = struct
     module T = struct
-      (* Record type TODO *)
       type t = City.t list [@@deriving compare, sexp]
     end
 
     include Comparable.Make (T)
 
     let of_stirng s =
-      match String.split ((String.substr_replace_all ~pattern:"." s ~with_:"") |> String.substr_replace_all ~pattern:" " ~with_:"") ~on:',' with
+      match
+        String.split
+          (String.substr_replace_all ~pattern:"." s ~with_:""
+           |> String.substr_replace_all ~pattern:" " ~with_:"")
+          ~on:','
+      with
       | lst -> Some (List.tl_exn lst)
     ;;
   end
@@ -23,14 +27,14 @@ module Highways = struct
       In_channel.read_lines (File_path.to_string input_file)
       |> List.concat_map ~f:(fun s ->
         match Connection.of_stirng s with
-        | Some (a) -> [a]
+        | Some a -> [ a ]
         | None ->
           printf
             "ERROR: Could not parse line as connection; dropping. %s\n"
             s;
           [])
     in
-    Connection.Set.of_list connections
+    Connection.Set.of_list connections |> Set.to_list |> List.tl_exn
   ;;
 end
 
@@ -48,7 +52,7 @@ let load_command =
       in
       fun () ->
         let highway = Highways.of_file input_file in
-        printf !"%{sexp: Highways.t}\n" highway]
+        printf !"%{sexp: Highways.Connection.T.t list}\n" highway]
 ;;
 
 module G = Graph.Imperative.Graph.Concrete (City)
@@ -97,14 +101,14 @@ let visualize_command =
           ~doc:"FILE where to write generated graph"
       in
       fun () ->
-        let highway =
-          Highways.of_file input_file |> Set.to_list |> List.tl_exn
-        in
-        let graph = List.fold highway ~init:(G.create ()) ~f:(fun graph i ->
+        let highway = Highways.of_file input_file in
+        let graph =
+          List.fold highway ~init:(G.create ()) ~f:(fun graph i ->
             add_edge_between_cities
-                ~head:(List.hd_exn i)
-                (List.tl_exn i)
-                ~graph) in
+              ~head:(List.hd_exn i)
+              (List.tl_exn i)
+              ~graph)
+        in
         Dot.output_graph
           (Out_channel.create (File_path.to_string output_file))
           graph;
