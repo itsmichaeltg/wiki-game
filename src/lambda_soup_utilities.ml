@@ -62,28 +62,15 @@ let%expect_test "get_list_items" =
 (* Gets the first item of all unordered lists contained in an HTML page. *)
 let get_first_item_of_all_unordered_lists contents : string list =
   let open Soup in
-  parse contents
+parse contents
   $$ "ul"
-  |> to_list
-  (* TODO *)
-  |> List.map ~f:(fun li ->
-    texts li |> String.concat ~sep:"" |> String.strip)
-  |> List.map ~f:(fun str -> String.split ~on:'\n' str |> List.hd_exn)
+  |> to_list 
+  |> List.map ~f:(fun i -> i $ "li" |> texts |> String.concat ~sep:"" |> String.strip)
 ;;
 
 (* Gets the first item of the second unordered list in an HTML page. *)
 let get_first_item_of_second_unordered_list contents : string =
-  (* get_first_item_of_all_unordered_lists *)
-  let open Soup in
-  parse contents
-  $$ "ul"
-  |> to_list
-  |> List.map ~f:(fun li ->
-    texts li |> String.concat ~sep:"" |> String.strip)
-    (* TODO *)
-  |> List.map ~f:(fun str -> String.split ~on:'\n' str |> List.hd_exn)
-  |> List.tl_exn
-  |> List.hd_exn
+  List.tl_exn (get_first_item_of_all_unordered_lists contents) |> List.hd_exn
 ;;
 
 (* Gets all bolded text from an HTML page. *)

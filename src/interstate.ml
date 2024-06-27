@@ -11,9 +11,7 @@ module Highways = struct
 
     let of_stirng s =
       match
-        String.split
-          (String.substr_replace_all ~pattern:"." s ~with_:""
-           |> String.substr_replace_all ~pattern:" " ~with_:"")
+        String.split s
           ~on:','
       with
       | lst -> Some (List.tl_exn lst)
@@ -64,7 +62,7 @@ module Dot = Graph.Graphviz.Dot (struct
     let default_edge_attributes _ = []
     let get_subgraph _ = None
     let vertex_attributes v = [ `Shape `Box; `Label v; `Fillcolor 1000 ]
-    let vertex_name v = v
+    let vertex_name v = sprintf {|"%s"|} v
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
   end)

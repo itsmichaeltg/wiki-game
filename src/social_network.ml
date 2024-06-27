@@ -130,15 +130,16 @@ let rec find_friend_group_helper network ~person ~seen ~worklist ~friends =
     let friends = vertex :: friends in
     let worklist = List.tl_exn worklist in
     let seen, worklist =
-      List.fold network ~init:(seen, worklist) ~f:(fun (seen, worklist) (i, j) ->
-        match String.compare i person with
-        | 0 ->
-          (match Set.mem seen j with
-           | false ->
-              (Set.add seen j,
-             List.append worklist [ j ])
-           | _ -> (seen, worklist))
-        | _ -> (seen, worklist))
+      List.fold
+        network
+        ~init:(seen, worklist)
+        ~f:(fun (seen, worklist) (i, j) ->
+          match String.compare i person with
+          | 0 ->
+            (match Set.mem seen j with
+             | false -> Set.add seen j, List.append worklist [ j ]
+             | _ -> seen, worklist)
+          | _ -> seen, worklist)
     in
     find_friend_group_helper network ~person:vertex ~seen ~worklist ~friends
 ;;
@@ -182,4 +183,36 @@ let command =
     ; "visualize", visualize_command
     ; "find-friend-group", find_friend_group_command
     ]
+;;
+
+let print_str_lst lst = List.iter lst ~f:(fun i -> printf "%s\n" i)
+
+let test ~person ~path =
+  let network = Network.of_file (File_path.of_string path) in
+  let friends = find_friend_group network ~person |> List.sort ~compare:String.compare in
+  Stdio.printf !"Friends: ";
+  print_str_lst friends
+;;
+
+let%expect_test "test lambda_soup_utils" =
+  test ~person:"romeo" ~path:"../resources/friends.txt";
+  [%expect {|
+        Friends: juliet
+        romeo
+    |}];
+  test ~person:"alpha" ~path:"../resources/friends.txt";
+  [%expect
+    {|
+  Friends: alpha
+  bravo
+  charlie
+  delta
+  echo
+  foxtrot
+  golf
+  hotel
+  india
+  kilo
+  lima
+  |}]
 ;;

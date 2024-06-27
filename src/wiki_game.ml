@@ -1,5 +1,6 @@
 open! Core
 module Article = String
+
 (* [get_linked_articles] should return a list of wikipedia article lengths contained in
    the input.
 
@@ -42,11 +43,11 @@ module G = Graph.Imperative.Graph.Concrete (Article)
 module Dot = Graph.Graphviz.Dot (struct
     include G
 
-    let edge_attributes _ = [ `Dir `None ]
+    let edge_attributes _ = [ `Dir `Forward ]
     let default_edge_attributes _ = []
     let get_subgraph _ = None
     let vertex_attributes v = [ `Shape `Box; `Label v; `Fillcolor 1000 ]
-    let vertex_name v = v
+    let vertex_name v = sprintf {|"%s"|} v
     let default_vertex_attributes _ = []
     let graph_attributes _ = []
   end)
@@ -55,7 +56,7 @@ module Dot = Graph.Graphviz.Dot (struct
 let get_title ~vertex ~how_to_fetch= 
   let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
   let open Soup in
-  parse contents $ "title" |> R.leaf_text |> (String.substr_replace_all ~pattern:"-" ~with_:"") |> (String.substr_replace_all ~pattern:" " ~with_:"") |> String.substr_replace_all ~pattern:"(" ~with_:"" |> String.substr_replace_all ~pattern:")" ~with_:""
+  parse contents $ "title" |> R.leaf_text 
 ;;
 
 let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_worklist ~seen = 
@@ -83,11 +84,12 @@ let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_wo
     get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
 ;;
 
-
 let add_edge_between_aticles lst ~graph =
-  List.iter (List.tl_exn lst) ~f:(fun i -> G.add_edge graph (List.hd_exn lst) i);
-  graph
+  match lst with 
+  | head :: tail -> List.iter tail ~f:(fun i -> G.add_edge graph head i); graph
+  | [] -> graph
 ;;
+
 (* [visualize] should explore all linked articles up to a distance of [max_depth] away
    from the given [origin] article, and output the result as a DOT file. It should use the
    [how_to_fetch] argument along with [File_fetcher] to fetch the articles so that the
@@ -99,7 +101,6 @@ let visualize ?(max_depth = 3) ~origin ~output_file ~how_to_fetch () : unit =
   let worklist = [origin] in
   let matrix = get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~next_worklist:[]
               ~worklist ~seen in
-  print_s [%message (matrix:string list list)];
   let graph = List.fold matrix ~init:(G.create ()) ~f:(fun graph i -> add_edge_between_aticles i ~graph) in
   Dot.output_graph
           (Out_channel.create (File_path.to_string output_file))
@@ -131,6 +132,26 @@ let visualize_command =
         printf !"Done! Wrote dot file to %{File_path}\n%!" output_file]
 ;;
 
+let rec dfs ~max_depth ~destination ~worklist ~seen ~path ~how_to_fetch=
+(* print_s [%message (worklist:string list)]; *)
+  match worklist with
+    | head :: tail -> 
+      (match max_depth with
+      | 0 -> dfs ~max_depth:(max_depth) ~destination ~worklist:tail ~seen ~path ~how_to_fetch
+      | _ -> 
+        match Set.mem seen head with 
+          | true -> dfs ~max_depth:(max_depth) ~destination ~worklist:tail ~seen ~path ~how_to_fetch
+          | false -> 
+            match String.equal head destination with 
+            | true -> print_s[%message head]; head :: dfs ~max_depth:0 ~destination ~worklist:tail ~seen ~path ~how_to_fetch
+            | false -> 
+              let seen = Set.add seen head in
+              let contents = File_fetcher.fetch_exn how_to_fetch ~resource:head in
+              let tail = (get_linked_articles contents) @ tail in
+              head :: dfs ~max_depth:(max_depth - 1) ~destination ~worklist:tail ~seen ~path ~how_to_fetch)
+        | _ -> []
+;;
+
 (* [find_path] should attempt to find a path between the origin article and the
    destination article via linked articles.
 
@@ -140,6 +161,8 @@ let visualize_command =
 
    [max_depth] is useful to limit the time the program spends exploring the graph. *)
 let find_path ?(max_depth = 3) ~origin ~destination ~how_to_fetch () =
+  let path = dfs ~max_depth ~destination ~worklist:[origin] ~seen:String.Set.empty ~path:[] ~how_to_fetch in
+  print_s [%message (path:string list)];
   ignore (max_depth : int);
   ignore (origin : string);
   ignore (destination : string);
