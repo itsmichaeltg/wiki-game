@@ -119,7 +119,8 @@ module Nodes = struct
      [Node.init] function. *)
   let of_edges (edges : Edge.t list) =
     List.fold ~init:Node_id.Map.empty edges ~f:(fun map edge ->
-      Map.add_exn map ~key:edge.a ~data:Node.init)
+      Map.set map ~key:edge.a ~data:(Node.init ())
+      |> Map.set ~key:edge.b ~data:(Node.init ()))
   ;;
 
   let find = Map.find_exn
@@ -168,7 +169,7 @@ module Nodes = struct
      shortest path have been marked as [Done] -- return the path from the
      origin to the given [distination]. *)
   let rec path t destination : Node_id.t list =
-    let data = Map.find_exn t destination in
+    let data = find t destination in
     match Node.state data with
     | Done { via } -> path t via @ [ destination ]
     | Origin | _ -> [ destination ]
@@ -194,12 +195,48 @@ module Nodes = struct
   ;;
 end
 
+let rec assign_nodes ~edges ~nodes_map ~origin ~destination ~dist_acc =
+  Edges.neighbors edges origin
+  |> List.iter ~f:(fun (node_id, curr_distance) ->
+    match Node.state (Nodes.find nodes_map node_id) with
+    | Unseen ->
+      Nodes.set_state
+        nodes_map
+        node_id
+        (Node.State.Todo { distance = curr_distance; via = origin })
+    | Todo { distance; via } ->
+      (match curr_distance + dist_acc < distance with
+       | true ->
+         Nodes.set_state
+           nodes_map
+           node_id
+           (Node.State.Todo
+              { distance = curr_distance + dist_acc; via = origin })
+       | false -> ())
+    | _ -> ());
+  match Nodes.next_node nodes_map with
+  | Some (node, (distance, via)) ->
+    Nodes.set_state nodes_map node (Node.State.Done { via });
+    assign_nodes
+      ~edges
+      ~nodes_map
+      ~origin:node
+      ~destination
+      ~dist_acc:distance
+  | None -> ()
+;;
+
 (* Exercise 6: Using the functions and types above, implement Dijkstras graph
    search algorithm! Remember to reenable unused warnings by deleting the
    first line of this file. *)
-let shortest_path ~edges ~origin ~destination : Node_id.t list = []
+let shortest_path ~edges ~origin ~destination : Node_id.t list =
+  let nodes_map = Nodes.of_edges edges in
+  Nodes.set_state nodes_map origin Node.State.Origin;
+  assign_nodes ~edges ~nodes_map ~origin ~destination ~dist_acc:0;
+  Nodes.path nodes_map destination
+;;
 
-let%expect_test ("shortest_path" [@tags "disabled"]) =
+let%expect_test "shortest_path" =
   let n = Node_id.create in
   let n0, n1, n2, n3, n4, n5 = n 0, n 1, n 2, n 3, n 4, n 5 in
   let edges =

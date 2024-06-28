@@ -4,7 +4,7 @@ module How_to_fetch = struct
   type t =
     | Local of File_path.t
     | Remote
-
+    [@@deriving sexp_of, compare, equal]
   let param =
     Command.Param.(
       flag

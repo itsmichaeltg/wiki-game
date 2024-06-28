@@ -52,7 +52,12 @@ module Dot = Graph.Graphviz.Dot (struct
     let graph_attributes _ = []
   end)
 
-  
+let set_vertex ~vertex ~how_to_fetch = 
+  match how_to_fetch with
+  | File_fetcher.How_to_fetch.Remote -> String.concat ["https://en.wikipedia.org"; vertex]
+  | _ -> vertex
+;;
+
 let get_title ~vertex ~how_to_fetch= 
   let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
   let open Soup in
@@ -69,7 +74,8 @@ let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_wo
     let next_worklist = [] in
     get_adjacency_matrix ~max_depth:(max_depth - 1) ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
   | _ -> 
-    let vertex = List.hd_exn worklist in
+    let vertex = set_vertex ~vertex:(List.hd_exn worklist) ~how_to_fetch in
+    print_s [%message (vertex:string)];
     match Set.mem seen vertex with 
     | true -> 
       let worklist = List.tl_exn worklist in
@@ -98,6 +104,7 @@ let add_edge_between_aticles lst ~graph =
 let visualize ?(max_depth = 3) ~origin ~output_file ~how_to_fetch () : unit =
   let matrix = [] in
   let seen = Set.empty (module String) in
+  let origin = String.substr_replace_all ~pattern:"https://en.wikipedia.org" ~with_:"" origin in
   let worklist = [origin] in
   let matrix = get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~next_worklist:[]
               ~worklist ~seen in
@@ -146,6 +153,7 @@ let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch ~found =
           | true -> []
           | false -> 
               let seen = Set.add seen vertex in
+              let vertex = set_vertex ~vertex ~how_to_fetch in
               let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
               List.concat_map (get_linked_articles contents) ~f:(fun i ->
               match (dfs ~max_depth:(max_depth - 1) ~destination ~seen ~vertex:i ~how_to_fetch ~found) with
@@ -162,6 +170,7 @@ let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch ~found =
 
    [max_depth] is useful to limit the time the program spends exploring the graph. *)
 let find_path ?(max_depth = 3) ~origin ~destination ~how_to_fetch () =
+  let origin = String.substr_replace_all ~pattern:"https://en.wikipedia.org" ~with_:"" origin in
   match dfs ~max_depth ~destination ~vertex:origin ~seen:String.Set.empty ~how_to_fetch ~found:(ref false) with
   | [] -> None
   | lst -> Some lst
