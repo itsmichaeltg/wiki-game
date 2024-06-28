@@ -117,9 +117,10 @@ module Nodes = struct
   (* Exercise 2: Given a list of edges, create a [t] that contains all nodes
      found in the edge list. Note that you can construct [Node.t]s with the
      [Node.init] function. *)
-  let of_edges edges = Node_id.Map.empty
-  (* List.fold ~init:Node_id.Map.empty edges ~f:(fun map edge -> Map.add map
-     (Node.init)) *)
+  let of_edges (edges : Edge.t list) =
+    List.fold ~init:Node_id.Map.empty edges ~f:(fun map edge ->
+      Map.add_exn map ~key:edge.a ~data:Node.init)
+  ;;
 
   let find = Map.find_exn
   let state t node_id = find t node_id |> Node.state
@@ -131,7 +132,18 @@ module Nodes = struct
 
   (* Exercise 3: Given a [t], find the next node to process by selecting the
      node with the smallest distance along with its via route. *)
-  let next_node t : (Node_id.t * (int * Node_id.t)) option = None
+  let next_node t : (Node_id.t * (int * Node_id.t)) option =
+    Map.fold t ~init:None ~f:(fun ~key ~data min_node ->
+      match Node.state data with
+      | Todo { distance; via } ->
+        (match min_node with
+         | None -> Some (key, (distance, via))
+         | Some (x, (min_dis, z)) ->
+           (match distance < min_dis with
+            | true -> Some (key, (distance, via))
+            | false -> min_node))
+      | _ -> min_node)
+  ;;
 
   let%expect_test "next_node" =
     let n = Node_id.create in
@@ -155,10 +167,31 @@ module Nodes = struct
      -- that is the origin has been marked as [Origin] and nodes on the
      shortest path have been marked as [Done] -- return the path from the
      origin to the given [distination]. *)
-  let path t destination : Node_id.t list = []
+  let rec path t destination : Node_id.t list =
+    let data = Map.find_exn t destination in
+    match Node.state data with
+    | Done { via } -> path t via @ [ destination ]
+    | Origin | _ -> [ destination ]
+  ;;
 
   (* Excercise 5: Write an expect test for the [path] function above. *)
-  let%expect_test "path" = ()
+  let%expect_test "path" =
+    let n = Node_id.create in
+    let n0, n1, n2, n3, n4, n5 = n 0, n 1, n 2, n 3, n 4, n 5 in
+    let t =
+      [ n0, { Node.state = Origin }
+      ; n1, { Node.state = Done { via = n0 } }
+      ; n2, { Node.state = Done { via = n1 } }
+      ; n3, { Node.state = Done { via = n2 } }
+      ; n4, { Node.state = Done { via = n3 } }
+      ; n5, { Node.state = Done { via = n4 } }
+      ]
+      |> Node_id.Map.of_alist_exn
+    in
+    let p = path t n5 in
+    print_s [%message (p : Node_id.t list)];
+    [%expect {| (p (0 1 2 3 4 5)) |}]
+  ;;
 end
 
 (* Exercise 6: Using the functions and types above, implement Dijkstras graph
