@@ -132,22 +132,25 @@ let visualize_command =
         printf !"Done! Wrote dot file to %{File_path}\n%!" output_file]
 ;;
 
-let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch =
-  match String.equal vertex destination with 
-  | true -> [get_title ~vertex ~how_to_fetch]
+let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch ~found =
+  match !found with
+  | true -> []
   | _ ->
-    match max_depth with
-    | 0 -> []
-    | _ -> 
-      match Set.mem seen vertex with 
-        | true -> []
-        | false -> 
-            let seen = Set.add seen vertex in
-            let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
-            List.concat_map (get_linked_articles contents) ~f:(fun i ->
-            match (dfs ~max_depth:(max_depth - 1) ~destination ~seen ~vertex:i ~how_to_fetch) with
-            | _ :: _ as list -> (get_title ~vertex ~how_to_fetch) :: list
-            | [] -> [])
+    match String.equal vertex destination with 
+    | true -> found := true; [get_title ~vertex ~how_to_fetch]
+    | _ ->
+      match max_depth with
+      | 0 -> []
+      | _ -> 
+        match Set.mem seen vertex with 
+          | true -> []
+          | false -> 
+              let seen = Set.add seen vertex in
+              let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
+              List.concat_map (get_linked_articles contents) ~f:(fun i ->
+              match (dfs ~max_depth:(max_depth - 1) ~destination ~seen ~vertex:i ~how_to_fetch ~found) with
+              | _ :: _ as list -> (get_title ~vertex ~how_to_fetch) :: list
+              | [] -> [])
 ;;
 
 (* [find_path] should attempt to find a path between the origin article and the
@@ -159,7 +162,7 @@ let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch =
 
    [max_depth] is useful to limit the time the program spends exploring the graph. *)
 let find_path ?(max_depth = 3) ~origin ~destination ~how_to_fetch () =
-  match dfs ~max_depth ~destination ~vertex:origin ~seen:String.Set.empty ~how_to_fetch with
+  match dfs ~max_depth ~destination ~vertex:origin ~seen:String.Set.empty ~how_to_fetch ~found:(ref false) with
   | [] -> None
   | lst -> Some lst
 ;;

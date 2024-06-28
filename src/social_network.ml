@@ -189,7 +189,9 @@ let print_str_lst lst = List.iter lst ~f:(fun i -> printf "%s\n" i)
 
 let test ~person ~path =
   let network = Network.of_file (File_path.of_string path) in
-  let friends = find_friend_group network ~person |> List.sort ~compare:String.compare in
+  let friends =
+    find_friend_group network ~person |> List.sort ~compare:String.compare
+  in
   Stdio.printf !"Friends: ";
   print_str_lst friends
 ;;

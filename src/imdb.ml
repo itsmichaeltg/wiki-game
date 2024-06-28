@@ -33,8 +33,9 @@ let command =
 let print_str_lst lst = List.iter lst ~f:(fun i -> printf "%s\n" i)
 
 let test ~content =
-  let credits = (get_credits content |> List.sort ~compare:String.compare) in
-  Stdio.printf !"Credits: "; print_str_lst credits
+  let credits = get_credits content |> List.sort ~compare:String.compare in
+  Stdio.printf !"Credits: ";
+  print_str_lst credits
 ;;
 
 let%expect_test "test lambda_soup_utils" =

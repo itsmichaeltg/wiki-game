@@ -45,20 +45,25 @@ let get_neighbor_coord ~index_tup =
   [ x + 1, y; x - 1, y; x, y - 1; x, y + 1 ]
 ;;
 
-let rec dfs_solver ~map ~seen ~vertex =
-  match Map.find map vertex with
-  | Some Maze.PATH | Some Maze.START ->
-    (match Set.mem seen vertex with
-     | true -> []
-     | false ->
-       let seen = Set.add seen vertex in
-       let children = get_neighbor_coord ~index_tup:vertex in
-       List.concat_map children ~f:(fun i ->
-         match dfs_solver ~map ~seen ~vertex:i with
-         | _ :: _ as list -> vertex :: list
-         | [] -> []))
-  | Some Maze.END -> [ vertex ]
-  | _ -> []
+let rec dfs_solver ~map ~seen ~vertex ~solved =
+  match !solved with
+  | true -> []
+  | _ ->
+    (match Map.find map vertex with
+     | Some Maze.PATH | Some Maze.START ->
+       (match Set.mem seen vertex with
+        | true -> []
+        | false ->
+          let seen = Set.add seen vertex in
+          let children = get_neighbor_coord ~index_tup:vertex in
+          List.concat_map children ~f:(fun i ->
+            match dfs_solver ~map ~seen ~vertex:i ~solved with
+            | _ :: _ as list ->
+              solved := true;
+              vertex :: list
+            | [] -> []))
+     | Some Maze.END -> [ vertex ]
+     | _ -> [])
 ;;
 
 let solve ~input_file =
@@ -71,7 +76,8 @@ let solve ~input_file =
          (Map.filter_keys map ~f:(fun key ->
             Maze.equal (Map.find_exn map key) Maze.START)
           |> Map.keys
-          |> List.hd_exn))
+          |> List.hd_exn)
+       ~solved:(ref false))
     ~f:(fun (x, y) -> printf "(%d, %d)\n" x y)
 ;;
 
