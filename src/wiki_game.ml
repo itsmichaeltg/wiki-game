@@ -17,7 +17,7 @@ module Article = String
    from a Wikipedia page will have the form "/wiki/<TITLE>". *)
 let get_linked_articles contents : string list =
   let open Soup in
-parse contents
+  parse contents
   $$ "a[href*='/wiki/']"
   |> to_list |> List.filter_map ~f:(fun li -> 
     let href = R.attribute "href" li in
@@ -64,6 +64,17 @@ let get_title ~vertex ~how_to_fetch=
   parse contents $ "title" |> R.leaf_text 
 ;;
 
+let get_links ~how_to_fetch ~resource =     
+  let contents = File_fetcher.fetch_exn how_to_fetch ~resource in
+  let linked_articles = get_linked_articles contents in
+  match how_to_fetch with
+  | File_fetcher.How_to_fetch.Remote -> List.map linked_articles ~f:(fun i -> 
+    if String.is_prefix ~prefix:"https://" i
+      then i
+  else String.concat ["https://en.wikipedia.org"; i])
+  | _ -> linked_articles
+;;
+
 let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_worklist ~seen = 
   match max_depth with 
   | 0 -> matrix
@@ -82,8 +93,7 @@ let rec get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~next_wo
       get_adjacency_matrix ~max_depth ~how_to_fetch ~matrix ~worklist ~seen ~next_worklist
     | _ ->
     let seen = Set.add seen vertex in
-    let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
-    let linked_articles = get_linked_articles contents in
+    let linked_articles = get_links ~resource:vertex ~how_to_fetch in
     let matrix = matrix @ [[get_title ~vertex ~how_to_fetch] @ List.map linked_articles ~f:(fun i -> get_title ~vertex:i ~how_to_fetch)] in
     let worklist = List.tl_exn worklist in
     let next_worklist = next_worklist @ linked_articles in
@@ -153,9 +163,8 @@ let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch ~found =
           | true -> []
           | false -> 
               let seen = Set.add seen vertex in
-              let vertex = set_vertex ~vertex ~how_to_fetch in
-              let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
-              List.concat_map (get_linked_articles contents) ~f:(fun i ->
+              (* let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in *)
+              List.concat_map (get_links ~resource:vertex ~how_to_fetch) ~f:(fun i ->
               match (dfs ~max_depth:(max_depth - 1) ~destination ~seen ~vertex:i ~how_to_fetch ~found) with
               | _ :: _ as list -> (get_title ~vertex ~how_to_fetch) :: list
               | [] -> [])
@@ -170,7 +179,6 @@ let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch ~found =
 
    [max_depth] is useful to limit the time the program spends exploring the graph. *)
 let find_path ?(max_depth = 3) ~origin ~destination ~how_to_fetch () =
-  let origin = String.substr_replace_all ~pattern:"https://en.wikipedia.org" ~with_:"" origin in
   match dfs ~max_depth ~destination ~vertex:origin ~seen:String.Set.empty ~how_to_fetch ~found:(ref false) with
   | [] -> None
   | lst -> Some lst

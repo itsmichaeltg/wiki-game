@@ -205,7 +205,7 @@ let rec assign_nodes ~edges ~nodes_map ~origin ~destination ~dist_acc =
         node_id
         (Node.State.Todo { distance = curr_distance; via = origin })
     | Todo { distance; via } ->
-      (match curr_distance + dist_acc < distance with
+      (match curr_distance + dist_acc <= distance with
        | true ->
          Nodes.set_state
            nodes_map
