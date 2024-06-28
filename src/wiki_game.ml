@@ -132,24 +132,22 @@ let visualize_command =
         printf !"Done! Wrote dot file to %{File_path}\n%!" output_file]
 ;;
 
-let rec dfs ~max_depth ~destination ~worklist ~seen ~path ~how_to_fetch=
-(* print_s [%message (worklist:string list)]; *)
-  match worklist with
-    | head :: tail -> 
-      (match max_depth with
-      | 0 -> dfs ~max_depth:(max_depth) ~destination ~worklist:tail ~seen ~path ~how_to_fetch
-      | _ -> 
-        match Set.mem seen head with 
-          | true -> dfs ~max_depth:(max_depth) ~destination ~worklist:tail ~seen ~path ~how_to_fetch
-          | false -> 
-            match String.equal head destination with 
-            | true -> print_s[%message head]; head :: dfs ~max_depth:0 ~destination ~worklist:tail ~seen ~path ~how_to_fetch
-            | false -> 
-              let seen = Set.add seen head in
-              let contents = File_fetcher.fetch_exn how_to_fetch ~resource:head in
-              let tail = (get_linked_articles contents) @ tail in
-              head :: dfs ~max_depth:(max_depth - 1) ~destination ~worklist:tail ~seen ~path ~how_to_fetch)
-        | _ -> []
+let rec dfs ~max_depth ~destination ~vertex ~seen ~how_to_fetch =
+  match String.equal vertex destination with 
+  | true -> [get_title ~vertex ~how_to_fetch]
+  | _ ->
+    match max_depth with
+    | 0 -> []
+    | _ -> 
+      match Set.mem seen vertex with 
+        | true -> []
+        | false -> 
+            let seen = Set.add seen vertex in
+            let contents = File_fetcher.fetch_exn how_to_fetch ~resource:vertex in
+            List.concat_map (get_linked_articles contents) ~f:(fun i ->
+            match (dfs ~max_depth:(max_depth - 1) ~destination ~seen ~vertex:i ~how_to_fetch) with
+            | _ :: _ as list -> (get_title ~vertex ~how_to_fetch) :: list
+            | [] -> [])
 ;;
 
 (* [find_path] should attempt to find a path between the origin article and the
@@ -161,13 +159,9 @@ let rec dfs ~max_depth ~destination ~worklist ~seen ~path ~how_to_fetch=
 
    [max_depth] is useful to limit the time the program spends exploring the graph. *)
 let find_path ?(max_depth = 3) ~origin ~destination ~how_to_fetch () =
-  let path = dfs ~max_depth ~destination ~worklist:[origin] ~seen:String.Set.empty ~path:[] ~how_to_fetch in
-  print_s [%message (path:string list)];
-  ignore (max_depth : int);
-  ignore (origin : string);
-  ignore (destination : string);
-  ignore (how_to_fetch : File_fetcher.How_to_fetch.t);
-  failwith "TODO"
+  match dfs ~max_depth ~destination ~vertex:origin ~seen:String.Set.empty ~how_to_fetch with
+  | [] -> None
+  | lst -> Some lst
 ;;
 
 let find_path_command =

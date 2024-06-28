@@ -123,8 +123,7 @@ module Nodes = struct
   (* Exercise 3: Given a [t], find the next node to process by selecting the node with the
      smallest distance along with its via route. *)
   let next_node t : (Node_id.t * (int * Node_id.t)) option = None
-
-  let%expect_test ("next_node" [@tags "disabled"]) =
+  let%expect_test ("next_node") =
     let n = Node_id.create in
     let n0, n1, n2, n3, n4, n5 = n 0, n 1, n 2, n 3, n 4, n 5 in
     let t =
